@@ -90,40 +90,6 @@ namespace MarcaAi.Backend.Services
             }
         }
 
-        public async Task<MenuiaResponse> VerificarDispositivoAsync(string authKey, string deviceIdentifier)
-        {
-            var requestBody = new
-            {
-                authkey = authKey,
-                message = deviceIdentifier,
-                checkDispositivo = "true"
-            };
-
-            var jsonContent = new StringContent(
-                JsonSerializer.Serialize(requestBody),
-                Encoding.UTF8,
-                "application/json"
-            );
-
-            try
-            {
-                _logger.LogInformation($"Verificando dispositivo: {JsonSerializer.Serialize(requestBody)}");
-                
-                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
-                response.EnsureSuccessStatusCode();
-
-                var responseBody = await response.Content.ReadAsStringAsync();
-                _logger.LogInformation($"Resposta da verificação: {responseBody}");
-                
-                return ParseVerificacaoResponse(responseBody);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Erro ao verificar dispositivo: {ex.Message}");
-                return new MenuiaResponse { Status = 500, Message = $"Erro ao verificar dispositivo: {ex.Message}" };
-            }
-        }
-
         public async Task<MenuiaResponse> AdicionarDispositivoQrCodeAsync(string masterAuthKey, string deviceName, string webhookUrl)
         {
             var requestBody = new
