@@ -1,0 +1,1 @@
+namespace MarcaAi.Backend.Models{ public class Feriado{ public int Id{get;set;} public int ClienteMasterId{get;set;} public ClienteMaster ClienteMaster{get;set;}=null!; public System.DateTime Data{get;set;} public string Nome{get;set;}=string.Empty; } }

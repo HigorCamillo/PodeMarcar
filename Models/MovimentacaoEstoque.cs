@@ -1,0 +1,1 @@
+namespace MarcaAi.Backend.Models{ public class MovimentacaoEstoque{ public int Id{get;set;} public int ProdutoId{get;set;} public Produto Produto{get;set;}=null!; public int ClienteMasterId{get;set;} public ClienteMaster ClienteMaster{get;set;}=null!; public System.DateTime Data{get;set;} public int Quantidade{get;set;} public string Tipo{get;set;}="entrada"; } }

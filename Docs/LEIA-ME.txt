@@ -1,0 +1,16 @@
+
+1) Substitua estes arquivos nas respectivas pastas do seu projeto.
+2) Apague a pasta Migrations/ se existir conteúdo antigo e então rode:
+   dotnet build
+   dotnet ef migrations add InitialCreate
+   dotnet ef database update
+3) Endpoints úteis
+   - GET /api/servicos?idClienteMaster=1
+   - GET /api/funcionarios?idClienteMaster=1
+   - GET /api/horarios/disponiveis?idClienteMaster=1&idFuncionario=1&from=2025-10-01&to=2025-10-01
+   - POST /api/agendamentos (body: {idClienteMaster,idCliente,idServico,idFuncionario,idHorario})
+   - GET /api/produtos?idClienteMaster=1
+   - POST /api/produtos/movimentar (entrada/saida)
+   - POST /api/produtos/vender
+4) Todos os relacionamentos são explícitos, incluindo FuncionarioServico.
+5) DateTimes mapeados para 'timestamp without time zone' para evitar problemas com Npgsql.
