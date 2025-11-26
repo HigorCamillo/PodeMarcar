@@ -106,8 +106,8 @@ public async Task<IActionResult> CriarAgendamento([FromBody] AgendamentoDto dto)
                     CriadoEm = DateTime.Now
                 };
 
-                _context.SolicitacoesExclusao.Add(solicitacaoCancelamento);
-                await _context.SaveChangesAsync();
+	                _context.SolicitacoesExclusao.Add(solicitacaoCancelamento);
+	                // await _context.SaveChangesAsync(); // Removido: O SaveChanges final já salva esta entidade.
 
                 string cancelamentoLink = $"https://marcaai-nine.vercel.app/confirmar-exclusao?codigo={codigoCancelamento}";
                 string msgLembrete = $"*Lembrete de Agendamento*\n\nSeu horário está próximo!\n\n" +
