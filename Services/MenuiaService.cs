@@ -53,7 +53,7 @@ namespace MarcaAi.Backend.Services
             {
                 authkey = masterAuthKey,
                 message = deviceName,
-                conecteQR = "true",
+                conecteQR = true,
                 webhook = webhookUrl
             };
 
