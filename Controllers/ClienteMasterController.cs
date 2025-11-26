@@ -103,17 +103,16 @@ namespace MarcaAi.Backend.Controllers
             if (string.IsNullOrEmpty(admin.AuthKey))
                 return BadRequest(new { Message = "AuthKey do Admin Geral não está configurada." });
 
-          // BASE URL
-var baseUrl = _configuration["PublicBaseUrl"];
-
-if (string.IsNullOrEmpty(baseUrl))
-{
-    var host = Request.Host.ToString();
-    baseUrl = $"https://{host}";
-}
+            // BASE URL
+            var baseUrl = _configuration["PublicBaseUrl"];
+            if (string.IsNullOrEmpty(baseUrl))
+            {
+                var host = Request.Host.ToString();
+                baseUrl = $"https://{host}";
+            }
 
             // WEBHOOK CORRETO PARA MENUIA
-            var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}";
+            var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}/on-whatsapp-connected";
             var deviceName = $"Dispositivo-{cliente.Slug}";
 
             try
@@ -170,7 +169,6 @@ if (string.IsNullOrEmpty(baseUrl))
             if (cliente == null)
                 return NotFound(new { Message = "Cliente Master não encontrado." });
 
-            // Evento mais importante: dispositivo conectou
             if (evento == "on-whatsapp-connected")
             {
                 _logger.LogInformation("WhatsApp conectado. Salvando chaves...");
@@ -187,11 +185,6 @@ if (string.IsNullOrEmpty(baseUrl))
 
                 _logger.LogInformation("Chaves salvas com sucesso!");
             }
-
-            // Você pode implementar outros eventos:
-            // - on-message
-            // - on-whatsapp-disconnected
-            // - on-status-changed
 
             return Ok(new { Success = true });
         }
