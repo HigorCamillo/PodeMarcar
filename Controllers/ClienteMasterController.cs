@@ -52,13 +52,17 @@ namespace MarcaAi.Backend.Controllers
             if (string.IsNullOrWhiteSpace(admin.AuthKey))
                 return BadRequest(new { Message = "AuthKey do Admin Geral não configurada." });
 
-            // BASE URL
-            var baseUrl = _configuration["PublicBaseUrl"];
-            if (string.IsNullOrEmpty(baseUrl))
-            {
-                baseUrl = $"{Request.Scheme}://{Request.Host}";
-            }
+var baseUrl = _configuration["PublicBaseUrl"];
 
+if (string.IsNullOrEmpty(baseUrl))
+{
+    var host = Request.Host.Host;  // pega somente hostname
+    var port = Request.Host.Port;  // pega porta (pode ser null)
+
+    baseUrl = port.HasValue
+        ? $"https://{host}:{port}"
+        : $"https://{host}";
+}
             // WEBHOOK DO MENUIA (SEM EVENTO NA URL!)
             var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}";
 
