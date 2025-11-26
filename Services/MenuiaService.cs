@@ -18,6 +18,11 @@ namespace MarcaAi.Backend.Services
 
         public async Task<MenuiaResponse> CriarAplicativoAsync(string masterAuthKey, string appName, string deviceIdentifier)
         {
+            return await ObterChavesAppAsync(masterAuthKey, appName, deviceIdentifier);
+        }
+
+        public async Task<MenuiaResponse> ObterChavesAppAsync(string masterAuthKey, string appName, string deviceIdentifier)
+        {
             var requestBody = new
             {
                 authkey = masterAuthKey,
@@ -33,17 +38,55 @@ namespace MarcaAi.Backend.Services
 
             try
             {
+                _logger.LogInformation($"Enviando requisição para Menuia (ObterChavesApp): {JsonSerializer.Serialize(requestBody)}");
+                
                 var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync();
-                _logger.LogInformation($"Resposta do Menuia (CriarAplicativo): {responseBody}");
+                _logger.LogInformation($"Resposta do Menuia (ObterChavesApp): {responseBody}");
+                
+                // O ParseMenuiaResponse já extrai appkey e authkey se presentes
                 return ParseMenuiaResponse(responseBody);
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Erro ao criar aplicativo: {ex.Message}");
-                return new MenuiaResponse { Status = 500, Message = $"Erro ao criar aplicativo: {ex.Message}" };
+                _logger.LogError($"Erro ao obter chaves do aplicativo: {ex.Message}");
+                return new MenuiaResponse { Status = 500, Message = $"Erro ao obter chaves do aplicativo: {ex.Message}" };
+            }
+        }
+
+        public async Task<MenuiaResponse> VerificarDispositivoAsync(string authKey, string deviceIdentifier)
+        {
+            var requestBody = new
+            {
+                authkey = authKey,
+                message = deviceIdentifier,
+                checkDispositivo = "true"
+            };
+
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            try
+            {
+                _logger.LogInformation($"Verificando dispositivo: {JsonSerializer.Serialize(requestBody)}");
+                
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Resposta da verificação: {responseBody}");
+                
+                return ParseVerificacaoResponse(responseBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erro ao verificar dispositivo: {ex.Message}");
+                return new MenuiaResponse { Status = 500, Message = $"Erro ao verificar dispositivo: {ex.Message}" };
             }
         }
 
@@ -240,6 +283,80 @@ namespace MarcaAi.Backend.Services
                 return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta do Menuia: {ex.Message}" };
             }
         }
+
+        private MenuiaResponse ParseVerificacaoResponse(string jsonResponse)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(jsonResponse);
+                var root = document.RootElement;
+
+                var response = new MenuiaResponse();
+
+                // Extrai status
+                if (root.TryGetProperty("status", out var statusElement))
+                {
+                    response.Status = statusElement.GetInt32();
+                    _logger.LogInformation($"Status: {response.Status}");
+                }
+                else
+                {
+                    response.Status = 200;
+                }
+
+                // Extrai mensagem
+                if (root.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String)
+                {
+                    response.Message = messageElement.GetString() ?? string.Empty;
+                    _logger.LogInformation($"Message: {response.Message}");
+                }
+
+                // Verifica se o dispositivo está conectado baseado na mensagem
+                // A API retorna "Dispositivo Conectado" quando está conectado
+                response.IsConnected = response.Status == 200 && 
+                                      !string.IsNullOrEmpty(response.Message) && 
+                                      response.Message.Contains("Conectado", StringComparison.OrdinalIgnoreCase);
+
+                _logger.LogInformation($"Dispositivo conectado: {response.IsConnected}");
+
+                // Se está conectado, tenta extrair dados do dispositivo
+                if (response.IsConnected && root.TryGetProperty("dados", out var dadosElement))
+                {
+                    _logger.LogInformation("Extraindo dados do dispositivo...");
+                    
+                    // Extrai ID do dispositivo
+                    if (dadosElement.TryGetProperty("id", out var idElement))
+                    {
+                        response.DeviceId = idElement.GetInt32();
+                        _logger.LogInformation($"Device ID: {response.DeviceId}");
+                    }
+
+                    // Nota: As chaves (appkey e authkey) são enviadas via webhook
+                    // quando o dispositivo conecta, não são retornadas nesta verificação
+                }
+
+                // Tenta extrair appkey se disponível (pode não estar presente)
+                if (root.TryGetProperty("appkey", out var appkeyElement) && appkeyElement.ValueKind == JsonValueKind.String)
+                {
+                    response.AppKey = appkeyElement.GetString();
+                    _logger.LogInformation($"AppKey encontrado na verificação");
+                }
+
+                // Tenta extrair authkey se disponível (pode não estar presente)
+                if (root.TryGetProperty("authkey", out var authkeyElement) && authkeyElement.ValueKind == JsonValueKind.String)
+                {
+                    response.AuthKey = authkeyElement.GetString();
+                    _logger.LogInformation($"AuthKey encontrado na verificação");
+                }
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erro ao parsear resposta de verificação: {ex.Message}");
+                return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta: {ex.Message}" };
+            }
+        }
     }
 
     public class MenuiaResponse
@@ -261,5 +378,8 @@ namespace MarcaAi.Backend.Services
 
         [JsonPropertyName("deviceId")]
         public int? DeviceId { get; set; }
+
+        [JsonPropertyName("isConnected")]
+        public bool IsConnected { get; set; }
     }
 }
