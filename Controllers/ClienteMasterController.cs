@@ -63,7 +63,7 @@ if (string.IsNullOrEmpty(baseUrl))
         ? $"https://{host}:{port}"
         : $"https://{host}";
 }
-            // WEBHOOK DO MENUIA (SEM EVENTO NA URL!)
+            // WEBHOOK DO MENUIA (SEM EVENTO NA URL! )
             var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}";
 
             var deviceName = $"Dispositivo-{cliente.Slug}";
@@ -129,11 +129,7 @@ if (string.IsNullOrEmpty(baseUrl))
                 // Se o dispositivo está conectado
                 if (response.IsConnected)
                 {
-                    // Recarrega o cliente do banco para pegar as chaves atualizadas
-                    // (que podem ter sido salvas pelo webhook)
-                    await _ctx.Entry(cliente).ReloadAsync();
-
-                    // Verifica se as chaves já foram salvas (via webhook)
+                    // Verifica se as chaves já foram salvas (via webhook ou tentativa anterior)
                     if (!string.IsNullOrWhiteSpace(cliente.AppKey) && 
                         !string.IsNullOrWhiteSpace(cliente.AuthKey))
                     {
@@ -147,52 +143,49 @@ if (string.IsNullOrEmpty(baseUrl))
                             AuthKey = cliente.AuthKey
                         });
                     }
+                    
+                    // Se as chaves não foram salvas, tenta obter ativamente (APENAS UMA VEZ)
+                    _logger.LogInformation($"Dispositivo conectado. Tentando obter chaves ativamente para Cliente={id}...");
+
+                    var appResponse = await menuiaService.ObterChavesAppAsync(
+                        admin.AuthKey,
+                        deviceName,
+                        deviceName // O Menuia usa o nome do dispositivo como identificador
+                    );
+
+                    // O log mostrou que a resposta do Menuia só tem a appkey, não a authkey.
+                    // Usaremos a authkey do Admin Geral para o cliente, conforme o fluxo esperado.
+                    if (!string.IsNullOrWhiteSpace(appResponse.AppKey))
+                    {
+                        // Chaves obtidas com sucesso! Salva no banco.
+                        cliente.AppKey = appResponse.AppKey;
+                        // A authkey do cliente é a mesma do Admin Geral, que foi usada para criar o app.
+                        cliente.AuthKey = admin.AuthKey; 
+                        cliente.UsaApiLembrete = true;
+
+                        _ctx.Update(cliente);
+                        await _ctx.SaveChangesAsync();
+
+                        _logger.LogInformation($"Chaves obtidas ativamente e salvas para Cliente={id}");
+
+                        return Ok(new
+                        {
+                            Connected = true,
+                            Message = "Dispositivo conectado e chaves obtidas ativamente.",
+                            AppKey = cliente.AppKey,
+                            AuthKey = cliente.AuthKey
+                        });
+                    }
                     else
                     {
-                        // Dispositivo conectado mas chaves ainda não foram recebidas via webhook.
-                        // Tenta obter as chaves ativamente usando o endpoint criarApp.
-                        _logger.LogInformation($"Dispositivo conectado. Tentando obter chaves ativamente para Cliente={id}...");
+                        // Não conseguiu obter as chaves ativamente (erro ou atraso)
+                        _logger.LogWarning($"Falha ao obter chaves ativamente para Cliente={id}. Resposta: {appResponse.Message}. AppKey obtida: {appResponse.AppKey}");
 
-                        var appResponse = await menuiaService.ObterChavesAppAsync(
-                            admin.AuthKey,
-                            deviceName,
-                            deviceName // O Menuia usa o nome do dispositivo como identificador
-                        );
-
-                        // O log mostrou que a resposta do Menuia só tem a appkey, não a authkey.
-                        // Usaremos a authkey do Admin Geral para o cliente, conforme o fluxo esperado.
-                        if (!string.IsNullOrWhiteSpace(appResponse.AppKey))
+                        return Ok(new
                         {
-                            // Chaves obtidas com sucesso! Salva no banco.
-                            cliente.AppKey = appResponse.AppKey;
-                            // A authkey do cliente é a mesma do Admin Geral, que foi usada para criar o app.
-                            cliente.AuthKey = admin.AuthKey; 
-                            cliente.UsaApiLembrete = true;
-
-                            _ctx.Update(cliente);
-                            await _ctx.SaveChangesAsync();
-
-                            _logger.LogInformation($"Chaves obtidas ativamente e salvas para Cliente={id}");
-
-                            return Ok(new
-                            {
-                                Connected = true,
-                                Message = "Dispositivo conectado e chaves obtidas ativamente.",
-                                AppKey = cliente.AppKey,
-                                AuthKey = cliente.AuthKey
-                            });
-                        }
-                        else
-                        {
-                            // Não conseguiu obter as chaves ativamente (erro ou atraso)
-                            _logger.LogWarning($"Falha ao obter chaves ativamente para Cliente={id}. Resposta: {appResponse.Message}. AppKey obtida: {appResponse.AppKey}");
-
-                            return Ok(new
-                            {
-                                Connected = true,
-                                Message = "Dispositivo conectado. Falha ao obter chaves ativamente. Aguardando webhook..."
-                            });
-                        }
+                            Connected = true,
+                            Message = "Dispositivo conectado. Falha ao obter chaves ativamente. Aguardando webhook..."
+                        });
                     }
                 }
 

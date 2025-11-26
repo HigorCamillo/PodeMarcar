@@ -10,13 +10,13 @@ namespace MarcaAi.Backend.Services
         private readonly ILogger<MenuiaService> _logger;
         private const string BaseUrl = "https://chatbot.menuia.com/api/developer";
 
-        public MenuiaService(HttpClient httpClient, ILogger<MenuiaService> logger)
+        public MenuiaService(HttpClient httpClient, ILogger<MenuiaService> logger )
         {
             _httpClient = httpClient;
             _logger = logger;
         }
 
-        public async Task<MenuiaResponse> CriarAplicativoAsync(string masterAuthKey, string appName, string deviceIdentifier)
+        public async Task<MenuiaResponse> CriarAplicativoAsync(string masterAuthKey, string appName, string deviceIdentifier )
         {
             var requestBody = new
             {
@@ -33,7 +33,7 @@ namespace MarcaAi.Backend.Services
 
             try
             {
-                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent );
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync();
@@ -66,7 +66,7 @@ namespace MarcaAi.Backend.Services
             {
                 _logger.LogInformation($"Enviando requisição para Menuia (ObterChavesApp): {JsonSerializer.Serialize(requestBody)}");
                 
-                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent );
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync();
@@ -101,7 +101,7 @@ namespace MarcaAi.Backend.Services
             {
                 _logger.LogInformation($"Verificando dispositivo: {JsonSerializer.Serialize(requestBody)}");
                 
-                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent );
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync();
@@ -136,7 +136,7 @@ namespace MarcaAi.Backend.Services
             {
                 _logger.LogInformation($"Enviando requisição para Menuia: {JsonSerializer.Serialize(requestBody)}");
                 
-                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent );
                 response.EnsureSuccessStatusCode();
 
                 var responseBody = await response.Content.ReadAsStringAsync();
