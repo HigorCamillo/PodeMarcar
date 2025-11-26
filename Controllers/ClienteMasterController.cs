@@ -22,7 +22,7 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ===========================
-        // GETs básicos
+        // GET BY ID
         // ===========================
         [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById(int id)
@@ -35,59 +35,8 @@ namespace MarcaAi.Backend.Controllers
             return dados == null ? NotFound() : Ok(dados);
         }
 
-        [HttpGet("by-celular/{celular}")]
-        public async Task<IActionResult> GetByCelular(string celular)
-        {
-            var dados = await _ctx.ClientesMaster
-                .Include(c => c.ConfiguracaoCores)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Celular == celular);
-
-            return dados == null ? NotFound() : Ok(dados);
-        }
-
-        [HttpGet("check-slug/{slug}")]
-        public async Task<IActionResult> CheckSlug(string slug)
-        {
-            bool exists = await _ctx.ClientesMaster.AnyAsync(c => c.Slug == slug);
-            return Ok(new { exists });
-        }
-
-        [HttpGet("{slug}")]
-        public async Task<IActionResult> GetBySlug(string slug)
-        {
-            var dados = await _ctx.ClientesMaster
-                .Include(c => c.ConfiguracaoCores)
-                .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Slug == slug);
-
-            return dados == null ? NotFound() : Ok(dados);
-        }
-
         // ===========================
-        // UPDATE
-        // ===========================
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] ClienteMasterUpdateDto dto)
-        {
-            var cliente = await _ctx.ClientesMaster.FindAsync(id);
-            if (cliente == null) return NotFound("Cliente Master não encontrado.");
-
-            cliente.UsaApiLembrete = dto.UsaApiLembrete;
-            cliente.AppKey = dto.AppKey;
-            cliente.AuthKey = dto.AuthKey;
-            cliente.TempoLembrete = dto.TempoLembrete;
-            cliente.Ativo = dto.Ativo;
-            cliente.AtualizacaoAutomatica = dto.AtualizacaoAutomatica;
-
-            _ctx.Update(cliente);
-            await _ctx.SaveChangesAsync();
-
-            return Ok(new { Message = "Configurações atualizadas com sucesso!" });
-        }
-
-        // ===========================
-        // GERAR QR CODE
+        // GERAR QR CODE MENUIA
         // ===========================
         [HttpPost("gerar-qrcode/{id}")]
         public async Task<IActionResult> GerarQrCode(int id, [FromServices] MenuiaService menuiaService)
@@ -100,19 +49,19 @@ namespace MarcaAi.Backend.Controllers
             if (admin == null)
                 return StatusCode(500, new { Message = "Configuração do Administrador Geral não encontrada." });
 
-            if (string.IsNullOrEmpty(admin.AuthKey))
-                return BadRequest(new { Message = "AuthKey do Admin Geral não está configurada." });
+            if (string.IsNullOrWhiteSpace(admin.AuthKey))
+                return BadRequest(new { Message = "AuthKey do Admin Geral não configurada." });
 
             // BASE URL
             var baseUrl = _configuration["PublicBaseUrl"];
             if (string.IsNullOrEmpty(baseUrl))
             {
-                var host = Request.Host.ToString();
-                baseUrl = $"https://{host}";
+                baseUrl = $"{Request.Scheme}://{Request.Host}";
             }
 
-            // WEBHOOK CORRETO PARA MENUIA
-            var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}/on-whatsapp-connected";
+            // WEBHOOK DO MENUIA (SEM EVENTO NA URL!)
+            var webhookUrl = $"{baseUrl}/api/ClienteMaster/webhook/{id}";
+
             var deviceName = $"Dispositivo-{cliente.Slug}";
 
             try
@@ -124,30 +73,17 @@ namespace MarcaAi.Backend.Controllers
                 );
 
                 if (response.Status != 200)
-                {
-                    return BadRequest(new
-                    {
-                        Message = "Erro ao solicitar QR Code do Menuia",
-                        Response = response
-                    });
-                }
+                    return BadRequest(new { Message = "Erro ao solicitar QR Code.", Response = response });
 
                 if (string.IsNullOrEmpty(response.QrCodeBase64))
-                {
-                    return BadRequest(new
-                    {
-                        Message = "Menuia retornou QR Code vazio.",
-                        Response = response
-                    });
-                }
+                    return BadRequest(new { Message = "QR Code vazio retornado pelo Menuia." });
 
                 return Ok(new
                 {
                     Message = "QR Code gerado com sucesso.",
                     QrCodeBase64 = response.QrCodeBase64,
-                    WebhookUrl = webhookUrl,
-                    DeviceName = deviceName,
-                    DeviceId = response.DeviceId
+                    DeviceId = response.DeviceId,
+                    WebhookUrl = webhookUrl
                 });
             }
             catch (Exception ex)
@@ -158,45 +94,52 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ===========================
-        // WEBHOOK UNIVERSAL MENUIA
+        // WEBHOOK OFICIAL MENUIA (SEM EVENTO NA URL!)
         // ===========================
-        [HttpPost("webhook/{id}/{evento}")]
-        public async Task<IActionResult> Webhook(int id, string evento, [FromBody] MenuiaResponse body)
+        [HttpPost("webhook/{id}")]
+        public async Task<IActionResult> Webhook(int id, [FromBody] MenuiaWebhook payload)
         {
-            _logger.LogInformation($"Webhook recebido. Cliente={id}, Evento={evento}");
+            _logger.LogInformation($"Webhook recebido do Menuia para Cliente={id}: {payload.Event}");
 
             var cliente = await _ctx.ClientesMaster.FindAsync(id);
             if (cliente == null)
                 return NotFound(new { Message = "Cliente Master não encontrado." });
 
-            if (evento == "on-whatsapp-connected")
+            // EVENTO: Dispositivo conectado
+            if (payload.Event == "device.connected")
             {
-                _logger.LogInformation("WhatsApp conectado. Salvando chaves...");
-
-                if (string.IsNullOrEmpty(body?.AppKey) || string.IsNullOrEmpty(body?.AuthKey))
+                if (string.IsNullOrWhiteSpace(payload?.Data?.AppKey) ||
+                    string.IsNullOrWhiteSpace(payload?.Data?.AuthKey))
+                {
                     return BadRequest(new { Message = "AppKey e AuthKey são obrigatórias." });
+                }
 
-                cliente.AppKey = body.AppKey;
-                cliente.AuthKey = body.AuthKey;
+                cliente.AppKey = payload.Data.AppKey;
+                cliente.AuthKey = payload.Data.AuthKey;
                 cliente.UsaApiLembrete = true;
 
                 _ctx.Update(cliente);
                 await _ctx.SaveChangesAsync();
 
-                _logger.LogInformation("Chaves salvas com sucesso!");
+                _logger.LogInformation($"Chaves salvas para Cliente={id}");
             }
 
             return Ok(new { Success = true });
         }
     }
 
-    public class ClienteMasterUpdateDto
+    // ===========================
+    // MODELOS PARA O WEBHOOK MENUIA
+    // ===========================
+    public class MenuiaWebhook
     {
-        public bool UsaApiLembrete { get; set; }
+        public string Event { get; set; } = string.Empty;
+        public MenuiaWebhookData Data { get; set; } = new();
+    }
+
+    public class MenuiaWebhookData
+    {
         public string? AppKey { get; set; }
         public string? AuthKey { get; set; }
-        public int? TempoLembrete { get; set; }
-        public bool AtualizacaoAutomatica { get; set; }
-        public bool Ativo { get; set; }
     }
 }
