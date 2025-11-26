@@ -167,7 +167,7 @@ public async Task<IActionResult> SolicitarResetSenha([FromBody] SolicitarResetSe
     _ctx.SolicitacoesResetSenha.Add(solicitacao);
     await _ctx.SaveChangesAsync();
 
-    string resetLink = $"http://localhost:3000/resetar-senha?codigo={codigo}";
+    string resetLink = $"https://marca-nv7defgj7-higors-projects-e4b93cd4.vercel.app/resetar-senha?codigo={codigo}";
     string msgConf = $"*Reset de Senha*\n\nClique no link abaixo para redefinir sua senha:\n{resetLink}\n\nO link expira em 1 hora.";
 
     try

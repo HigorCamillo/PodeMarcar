@@ -79,7 +79,7 @@ namespace MarcaAi.Backend.Controllers
                 AppKey = req.AppKey,
                 AuthKey = req.AuthKey,
                 Ativo = true,
-                CriadoEm = DateTime.UtcNow
+                CriadoEm = DateTime.Now
             };
 
             _ctx.AdministradoresGerais.Add(admin);

@@ -109,7 +109,7 @@ public async Task<IActionResult> CriarAgendamento([FromBody] AgendamentoDto dto)
                 _context.SolicitacoesExclusao.Add(solicitacaoCancelamento);
                 await _context.SaveChangesAsync();
 
-                string cancelamentoLink = $"http://localhost:3000/confirmar-exclusao?codigo={codigoCancelamento}";
+                string cancelamentoLink = $"https://marca-nv7defgj7-higors-projects-e4b93cd4.vercel.app/confirmar-exclusao?codigo={codigoCancelamento}";
                 string msgLembrete = $"*Lembrete de Agendamento*\n\nSeu horário está próximo!\n\n" +
                                      $"👤 Profissional: {funcionario.Nome}\n✂️ Serviço: {servico.Nome}\n" +
                                      $"📅 Data: {dataHora:dd/MM/yyyy}\n⏰ Horário: {dataHora:HH:mm}\n\n" +
@@ -272,7 +272,7 @@ public async Task<IActionResult> ConfirmarExclusao([FromQuery] Guid codigo)
 
         // Redireciona para página principal + slug do cliente master
         string slug = solicitacao.Agendamento?.ClienteMaster?.Slug ?? "";
-        string urlRedirect = $"http://localhost:3000/{slug}";
+        string urlRedirect = $"https://marca-nv7defgj7-higors-projects-e4b93cd4.vercel.app/{slug}";
 
         string html = $@"
             <html>
