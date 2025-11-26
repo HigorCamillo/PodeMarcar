@@ -162,153 +162,99 @@ namespace MarcaAi.Backend.Services
         /// 3. {"error": "Mensagem de erro"}
         /// </summary>
         private MenuiaResponse ParseMenuiaResponse(string jsonResponse)
+{
+    try
+    {
+        using var document = JsonDocument.Parse(jsonResponse);
+        var root = document.RootElement;
+
+        var response = new MenuiaResponse();
+
+        // Status
+        if (root.TryGetProperty("status", out var statusElement))
+            response.Status = statusElement.GetInt32();
+        else
+            response.Status = 200;
+
+        // Mensagem e possível objeto dentro de message
+        JsonElement? messageObj = null;
+        string messageStr = null;
+
+        if (root.TryGetProperty("message", out var messageElement))
         {
-            try
+            if (messageElement.ValueKind == JsonValueKind.String)
             {
-                using var document = JsonDocument.Parse(jsonResponse);
-                var root = document.RootElement;
-
-                var response = new MenuiaResponse();
-
-                // Tenta extrair o status
-                if (root.TryGetProperty("status", out var statusElement))
-                {
-                    response.Status = statusElement.GetInt32();
-                    _logger.LogInformation($"Status encontrado: {response.Status}");
-                }
-                else
-                {
-                    response.Status = 200;
-                }
-
-                // Verifica se há erro
-                if (root.TryGetProperty("error", out var errorElement))
-                {
-                    response.Status = 400;
-                    response.Message = errorElement.ValueKind == JsonValueKind.String 
-                        ? errorElement.GetString() ?? "Erro desconhecido"
-                        : errorElement.GetRawText();
-                    _logger.LogError($"Erro na resposta: {response.Message}");
-                    return response;
-                }
-
-                // Tenta extrair o message (pode ser string ou objeto)
-                string messageContent = null;
-                if (root.TryGetProperty("message", out var messageElement))
-                {
-                    if (messageElement.ValueKind == JsonValueKind.String)
-                    {
-                        messageContent = messageElement.GetString() ?? string.Empty;
-                        _logger.LogInformation($"Message (string) encontrado, comprimento: {messageContent.Length}");
-                    }
-                    else if (messageElement.ValueKind == JsonValueKind.Object)
-                    {
-                        messageContent = messageElement.GetRawText();
-                        _logger.LogInformation($"Message (object) encontrado, comprimento: {messageContent.Length}");
-                    }
-                }
-
-                // Tenta extrair qrCodeUrl (pode ser string ou objeto)
-                string qrCodeUrlContent = null;
-                if (root.TryGetProperty("qrCodeUrl", out var qrCodeUrlElement))
-                {
-                    if (qrCodeUrlElement.ValueKind == JsonValueKind.String)
-                    {
-                        qrCodeUrlContent = qrCodeUrlElement.GetString() ?? string.Empty;
-                        _logger.LogInformation($"qrCodeUrl (string) encontrado, comprimento: {qrCodeUrlContent.Length}");
-                    }
-                    else if (qrCodeUrlElement.ValueKind == JsonValueKind.Object)
-                    {
-                        qrCodeUrlContent = qrCodeUrlElement.GetRawText();
-                        _logger.LogInformation($"qrCodeUrl (object) encontrado, comprimento: {qrCodeUrlContent.Length}");
-                    }
-                }
-
-                // Se não encontrou qrCodeUrl, tenta usar message (pode conter o JSON stringificado)
-                var jsonStringContent = qrCodeUrlContent ?? messageContent;
-
-                if (!string.IsNullOrEmpty(jsonStringContent))
-                {
-                    // Tenta fazer parsing do JSON stringificado
-                    try
-                    {
-                        using var qrDocument = JsonDocument.Parse(jsonStringContent);
-                        var qrRoot = qrDocument.RootElement;
-                        
-                        _logger.LogInformation($"JSON stringificado parseado com sucesso");
-                        
-                        // Tenta extrair o campo 'qr' (pode ser 'qr', 'qrcode', 'image', etc)
-                        if (qrRoot.TryGetProperty("qr", out var qrElement) && qrElement.ValueKind == JsonValueKind.String)
-                        {
-                            response.QrCodeBase64 = qrElement.GetString();
-                            _logger.LogInformation($"Campo 'qr' encontrado, comprimento: {response.QrCodeBase64?.Length ?? 0}");
-                        }
-                        else if (qrRoot.TryGetProperty("qrcode", out var qrcodeElement) && qrcodeElement.ValueKind == JsonValueKind.String)
-                        {
-                            response.QrCodeBase64 = qrcodeElement.GetString();
-                            _logger.LogInformation($"Campo 'qrcode' encontrado, comprimento: {response.QrCodeBase64?.Length ?? 0}");
-                        }
-                        else if (qrRoot.TryGetProperty("image", out var imageElement) && imageElement.ValueKind == JsonValueKind.String)
-                        {
-                            response.QrCodeBase64 = imageElement.GetString();
-                            _logger.LogInformation($"Campo 'image' encontrado, comprimento: {response.QrCodeBase64?.Length ?? 0}");
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Nenhum campo de imagem encontrado no JSON stringificado");
-                            // Log todas as propriedades disponíveis
-                            foreach (var prop in qrRoot.EnumerateObject())
-                            {
-                                _logger.LogInformation($"Propriedade encontrada: {prop.Name} (tipo: {prop.Value.ValueKind})");
-                            }
-                        }
-                        
-                        // Tenta extrair o ID do dispositivo
-                        if (qrRoot.TryGetProperty("id", out var idElement))
-                        {
-                            if (idElement.ValueKind == JsonValueKind.Number)
-                            {
-                                response.DeviceId = idElement.GetInt32();
-                                _logger.LogInformation($"Device ID: {response.DeviceId}");
-                            }
-                        }
-                        
-                        response.Message = "QR Code gerado com sucesso";
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning($"Erro ao parsear JSON stringificado: {ex.Message}");
-                        response.Message = jsonStringContent;
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("Nenhum conteúdo de QR Code encontrado na resposta");
-                    response.Message = messageContent ?? "Sem conteúdo";
-                }
-
-                // Tenta extrair appkey
-                if (root.TryGetProperty("appkey", out var appkeyElement) && appkeyElement.ValueKind == JsonValueKind.String)
-                {
-                    response.AppKey = appkeyElement.GetString();
-                    _logger.LogInformation($"AppKey encontrado");
-                }
-
-                // Tenta extrair authkey
-                if (root.TryGetProperty("authkey", out var authkeyElement) && authkeyElement.ValueKind == JsonValueKind.String)
-                {
-                    response.AuthKey = authkeyElement.GetString();
-                    _logger.LogInformation($"AuthKey encontrado");
-                }
-
-                return response;
+                messageStr = messageElement.GetString() ?? string.Empty;
             }
-            catch (Exception ex)
+            else if (messageElement.ValueKind == JsonValueKind.Object)
             {
-                _logger.LogError($"Erro ao parsear resposta do Menuia: {ex.Message}");
-                return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta do Menuia: {ex.Message}" };
+                messageObj = messageElement;
             }
         }
+
+        // qrCodeUrl pode estar separado ou dentro de message
+        string qrContent = null;
+
+        if (root.TryGetProperty("qrCodeUrl", out var qrCodeElement))
+        {
+            qrContent = qrCodeElement.ValueKind == JsonValueKind.String
+                ? qrCodeElement.GetString()
+                : qrCodeElement.GetRawText();
+        }
+        else if (messageObj.HasValue && messageObj.Value.TryGetProperty("qr", out var qrElement) && qrElement.ValueKind == JsonValueKind.String)
+        {
+            qrContent = qrElement.GetString();
+        }
+
+        response.QrCodeBase64 = qrContent;
+
+        // Extrair appkey e authkey do nível raiz
+        if (root.TryGetProperty("appkey", out var appkeyElement) && appkeyElement.ValueKind == JsonValueKind.String)
+            response.AppKey = appkeyElement.GetString();
+
+        if (root.TryGetProperty("authkey", out var authkeyElement) && authkeyElement.ValueKind == JsonValueKind.String)
+            response.AuthKey = authkeyElement.GetString();
+
+        // Se estiver dentro de message (objeto)
+        if (messageObj.HasValue)
+        {
+            var msg = messageObj.Value;
+
+            if (string.IsNullOrEmpty(response.AppKey) && msg.TryGetProperty("appkey", out var appkeyInMsg) && appkeyInMsg.ValueKind == JsonValueKind.String)
+                response.AppKey = appkeyInMsg.GetString();
+
+            if (string.IsNullOrEmpty(response.AuthKey) && msg.TryGetProperty("authkey", out var authkeyInMsg) && authkeyInMsg.ValueKind == JsonValueKind.String)
+                response.AuthKey = authkeyInMsg.GetString();
+
+            // DeviceId
+            if (msg.TryGetProperty("id", out var idElement) && idElement.ValueKind == JsonValueKind.Number)
+                response.DeviceId = idElement.GetInt32();
+
+            response.Message = "QR Code gerado com sucesso";
+        }
+        else
+        {
+            response.Message = messageStr ?? "Sem conteúdo";
+        }
+
+        // Verifica se há erro
+        if (root.TryGetProperty("error", out var errorElement))
+        {
+            response.Status = 400;
+            response.Message = errorElement.ValueKind == JsonValueKind.String
+                ? errorElement.GetString() ?? "Erro desconhecido"
+                : errorElement.GetRawText();
+        }
+
+        return response;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError($"Erro ao parsear resposta do Menuia: {ex.Message}");
+        return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta do Menuia: {ex.Message}" };
+    }
+}
+
 
         private MenuiaResponse ParseVerificacaoResponse(string jsonResponse)
         {
