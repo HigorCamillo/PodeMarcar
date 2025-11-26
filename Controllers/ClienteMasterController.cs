@@ -98,6 +98,68 @@ if (string.IsNullOrEmpty(baseUrl))
         }
 
         // ===========================
+        // VERIFICAR DISPOSITIVO CONECTADO
+        // ===========================
+        [HttpPost("verificar-dispositivo/{id}")]
+        public async Task<IActionResult> VerificarDispositivo(int id, [FromServices] MenuiaService menuiaService)
+        {
+            var cliente = await _ctx.ClientesMaster.FindAsync(id);
+            if (cliente == null)
+                return NotFound(new { Message = "Cliente Master não encontrado." });
+
+            var admin = await _ctx.AdministradoresGerais.FirstOrDefaultAsync();
+            if (admin == null)
+                return StatusCode(500, new { Message = "Configuração do Administrador Geral não encontrada." });
+
+            if (string.IsNullOrWhiteSpace(admin.AuthKey))
+                return BadRequest(new { Message = "AuthKey do Admin Geral não configurada." });
+
+            var deviceName = $"Dispositivo-{cliente.Slug}";
+
+            try
+            {
+                var response = await menuiaService.VerificarDispositivoAsync(
+                    admin.AuthKey,
+                    deviceName
+                );
+
+                // Se o dispositivo está conectado e retornou as chaves, salva no banco
+                if (response.IsConnected && 
+                    !string.IsNullOrWhiteSpace(response.AppKey) && 
+                    !string.IsNullOrWhiteSpace(response.AuthKey))
+                {
+                    cliente.AppKey = response.AppKey;
+                    cliente.AuthKey = response.AuthKey;
+                    cliente.UsaApiLembrete = true;
+
+                    _ctx.Update(cliente);
+                    await _ctx.SaveChangesAsync();
+
+                    _logger.LogInformation($"Chaves salvas via verificação para Cliente={id}");
+
+                    return Ok(new
+                    {
+                        Connected = true,
+                        Message = "Dispositivo conectado e chaves salvas com sucesso.",
+                        AppKey = response.AppKey,
+                        AuthKey = response.AuthKey
+                    });
+                }
+
+                return Ok(new
+                {
+                    Connected = response.IsConnected,
+                    Message = response.Message ?? "Dispositivo ainda não conectado."
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao verificar dispositivo");
+                return StatusCode(500, new { Message = ex.Message });
+            }
+        }
+
+        // ===========================
         // WEBHOOK OFICIAL MENUIA (SEM EVENTO NA URL!)
         // ===========================
         [HttpPost("webhook/{id}")]

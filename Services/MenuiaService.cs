@@ -47,6 +47,40 @@ namespace MarcaAi.Backend.Services
             }
         }
 
+        public async Task<MenuiaResponse> VerificarDispositivoAsync(string authKey, string deviceIdentifier)
+        {
+            var requestBody = new
+            {
+                authkey = authKey,
+                message = deviceIdentifier,
+                checkDispositivo = "true"
+            };
+
+            var jsonContent = new StringContent(
+                JsonSerializer.Serialize(requestBody),
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            try
+            {
+                _logger.LogInformation($"Verificando dispositivo: {JsonSerializer.Serialize(requestBody)}");
+                
+                var response = await _httpClient.PostAsync(BaseUrl, jsonContent);
+                response.EnsureSuccessStatusCode();
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                _logger.LogInformation($"Resposta da verificação: {responseBody}");
+                
+                return ParseVerificacaoResponse(responseBody);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erro ao verificar dispositivo: {ex.Message}");
+                return new MenuiaResponse { Status = 500, Message = $"Erro ao verificar dispositivo: {ex.Message}" };
+            }
+        }
+
         public async Task<MenuiaResponse> AdicionarDispositivoQrCodeAsync(string masterAuthKey, string deviceName, string webhookUrl)
         {
             var requestBody = new
@@ -240,6 +274,53 @@ namespace MarcaAi.Backend.Services
                 return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta do Menuia: {ex.Message}" };
             }
         }
+
+        private MenuiaResponse ParseVerificacaoResponse(string jsonResponse)
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(jsonResponse);
+                var root = document.RootElement;
+
+                var response = new MenuiaResponse();
+
+                // Verifica se o dispositivo está conectado
+                if (root.TryGetProperty("connected", out var connectedElement))
+                {
+                    response.IsConnected = connectedElement.GetBoolean();
+                    _logger.LogInformation($"Dispositivo conectado: {response.IsConnected}");
+                }
+
+                // Extrai appkey se disponível
+                if (root.TryGetProperty("appkey", out var appkeyElement) && appkeyElement.ValueKind == JsonValueKind.String)
+                {
+                    response.AppKey = appkeyElement.GetString();
+                    _logger.LogInformation($"AppKey encontrado na verificação");
+                }
+
+                // Extrai authkey se disponível
+                if (root.TryGetProperty("authkey", out var authkeyElement) && authkeyElement.ValueKind == JsonValueKind.String)
+                {
+                    response.AuthKey = authkeyElement.GetString();
+                    _logger.LogInformation($"AuthKey encontrado na verificação");
+                }
+
+                // Extrai mensagem
+                if (root.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String)
+                {
+                    response.Message = messageElement.GetString() ?? string.Empty;
+                }
+
+                response.Status = response.IsConnected ? 200 : 400;
+
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Erro ao parsear resposta de verificação: {ex.Message}");
+                return new MenuiaResponse { Status = 500, Message = $"Erro ao parsear resposta: {ex.Message}" };
+            }
+        }
     }
 
     public class MenuiaResponse
@@ -261,5 +342,8 @@ namespace MarcaAi.Backend.Services
 
         [JsonPropertyName("deviceId")]
         public int? DeviceId { get; set; }
+
+        [JsonPropertyName("isConnected")]
+        public bool IsConnected { get; set; }
     }
 }
