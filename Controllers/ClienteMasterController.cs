@@ -83,11 +83,8 @@ public async Task<IActionResult> GerarQrCode(int id)
         if (string.IsNullOrEmpty(response.DeviceId))
             return BadRequest(new { Message = "Menuia não retornou DeviceId." });
 
-        // ❌ NÃO SALVA mais no banco
-        // cliente.DeviceId = response.DeviceId;
-        // await _ctx.SaveChangesAsync();
 
-        // ✔ Apenas retorna ao front
+
         return Ok(new
         {
             Message = "QR Code gerado com sucesso.",
@@ -129,6 +126,17 @@ public async Task<IActionResult> Webhook(int id, [FromBody] MenuiaWebhook payloa
         cliente.UsaApiLembrete = true;
 
         await _ctx.SaveChangesAsync();
+
+        // CHAMADA ADICIONADA: Validar o dispositivo após a conexão bem-sucedida
+        var admin = await _ctx.AdministradoresGerais.FirstOrDefaultAsync();
+        if (admin != null && !string.IsNullOrWhiteSpace(admin.AuthKey) && !string.IsNullOrWhiteSpace(payload.Data.Dispositivo))
+        {
+            var validacaoSucesso = await _menuia.ValidarDispositivoAsync(admin.AuthKey, payload.Data.Dispositivo);
+            if (!validacaoSucesso)
+            {
+                _logger.LogWarning($"Falha ao validar dispositivo {payload.Data.Dispositivo} após conexão no Webhook.");
+            }
+        }
     }
 
     return Ok(new { Success = true });
