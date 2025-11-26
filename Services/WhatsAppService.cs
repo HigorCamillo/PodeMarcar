@@ -1,4 +1,3 @@
-
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -16,6 +15,18 @@ namespace MarcaAi.Backend.Services
             _logger = logger;
         }
 
+        // Método auxiliar para normalizar número de celular
+        private string NormalizarNumero(string numero)
+        {
+            var apenasDigitos = new string(numero.Where(char.IsDigit).ToArray());
+
+            // Adiciona o DDI 55 se ainda não estiver presente e tiver 11 dígitos
+            if (apenasDigitos.Length == 11 && !apenasDigitos.StartsWith("55"))
+                apenasDigitos = "55" + apenasDigitos;
+
+            return apenasDigitos;
+        }
+
         public async Task<bool> SendMessage(
             string to,
             string message,
@@ -23,6 +34,8 @@ namespace MarcaAi.Backend.Services
             string authKey,
             bool sandbox = false)
         {
+            to = NormalizarNumero(to);
+
             var url = "https://chatbot.menuia.com/api/create-message";
 
             var postData = new
@@ -49,7 +62,7 @@ namespace MarcaAi.Backend.Services
 
                 _logger.LogInformation("Resposta da WhatsApp API: {StatusCode} - {ResponseBody}", response.StatusCode, responseBody);
 
-                response.EnsureSuccessStatusCode(); // Lança exceção para códigos de status HTTP de erro
+                response.EnsureSuccessStatusCode();
                 return true;
             }
             catch (HttpRequestException ex)
@@ -66,6 +79,8 @@ namespace MarcaAi.Backend.Services
             string authKey,
             bool sandbox = false)
         {
+            to = NormalizarNumero(to);
+
             var url = "https://chatbot.menuia.com/api/create-message";
 
             var postData = new
@@ -92,7 +107,7 @@ namespace MarcaAi.Backend.Services
 
                 _logger.LogInformation("Resposta da WhatsApp API: {StatusCode} - {ResponseBody}", response.StatusCode, responseBody);
 
-                response.EnsureSuccessStatusCode(); // Lança exceção se houver erro HTTP
+                response.EnsureSuccessStatusCode();
                 return true;
             }
             catch (HttpRequestException ex)
@@ -110,9 +125,10 @@ namespace MarcaAi.Backend.Services
             DateTime scheduledTime,
             bool sandbox = false)
         {
+            to = NormalizarNumero(to);
+
             var url = "https://chatbot.menuia.com/api/create-message";
 
-            // Formata a data no formato esperado pela API: "yyyy-MM-dd HH:mm:ss"
             var agendamentoFormatado = scheduledTime.ToString("yyyy-MM-dd HH:mm:ss");
 
             var postData = new
@@ -148,7 +164,5 @@ namespace MarcaAi.Backend.Services
                 return false;
             }
         }
-        
     }
 }
-
