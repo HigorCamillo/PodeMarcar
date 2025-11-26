@@ -24,15 +24,84 @@ namespace MarcaAi.Backend.Controllers
         // ===========================
         // GET BY ID
         // ===========================
-        [HttpGet("{id:int}")]
+               [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById(int id)
         {
-            var dados = await _ctx.ClientesMaster
-                .Include(c => c.ConfiguracaoCores)
+            var clienteMaster = await _ctx.ClientesMaster
+                .Include(cm => cm.ConfiguracaoCores)
                 .AsNoTracking()
-                .FirstOrDefaultAsync(c => c.Id == id);
+                .FirstOrDefaultAsync(cm => cm.Id == id);
 
-            return dados == null ? NotFound() : Ok(dados);
+            if (clienteMaster == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(clienteMaster);
+        }
+
+        [HttpGet("by-celular/{celular}")]
+        public async Task<IActionResult> GetByCelular(string celular)
+        {
+            var clienteMaster = await _ctx.ClientesMaster
+                .Include(cm => cm.ConfiguracaoCores)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(cm => cm.Celular == celular);
+
+            if (clienteMaster == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(clienteMaster);
+        }
+
+        [HttpGet("check-slug/{slug}")]
+        public async Task<IActionResult> CheckSlug(string slug)
+        {
+            var exists = await _ctx.ClientesMaster
+                .AnyAsync(cm => cm.Slug == slug);
+
+            return Ok(new { exists });
+        }
+        
+        [HttpGet("{slug}")]
+        public async Task<IActionResult> GetBySlug(string slug)
+        {
+            var clienteMaster = await _ctx.ClientesMaster
+                .Include(cm => cm.ConfiguracaoCores)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(cm => cm.Slug == slug);
+
+            if (clienteMaster == null)
+            {
+                return NotFound();
+            }
+
+            return Ok(clienteMaster);
+        }
+
+        [HttpPut("{id}")]
+        public async Task<IActionResult> UpdateClienteMaster(int id, [FromBody] ClienteMasterUpdateDto dto)
+        {
+            var clienteMaster = await _ctx.ClientesMaster.FindAsync(id);
+            if (clienteMaster == null)
+            {
+                return NotFound("Cliente Master não encontrado.");
+            }
+
+            clienteMaster.UsaApiLembrete = dto.UsaApiLembrete;
+            clienteMaster.AppKey = dto.AppKey;
+            clienteMaster.AuthKey = dto.AuthKey;
+            clienteMaster.TempoLembrete = dto.TempoLembrete;
+
+            clienteMaster.AtualizacaoAutomatica = dto.AtualizacaoAutomatica;
+            clienteMaster.Ativo = dto.Ativo;
+
+            _ctx.ClientesMaster.Update(clienteMaster);
+            await _ctx.SaveChangesAsync();
+
+            return Ok(new { Message = "Configurações atualizadas com sucesso!" });
         }
 
         // ===========================
@@ -251,5 +320,16 @@ if (string.IsNullOrEmpty(baseUrl))
     {
         public string? AppKey { get; set; }
         public string? AuthKey { get; set; }
+    }
+
+    public class ClienteMasterUpdateDto
+    {
+        public bool UsaApiLembrete { get; set; }
+        public string? AppKey { get; set; }
+        public string? AuthKey { get; set; }
+        public int? TempoLembrete { get; set; }
+
+        public bool AtualizacaoAutomatica { get; set; }
+        public bool Ativo { get; set; }
     }
 }
