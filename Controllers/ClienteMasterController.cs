@@ -83,8 +83,6 @@ public async Task<IActionResult> GerarQrCode(int id)
         if (string.IsNullOrEmpty(response.DeviceId))
             return BadRequest(new { Message = "Menuia não retornou DeviceId." });
 
-
-
         return Ok(new
         {
             Message = "QR Code gerado com sucesso.",
