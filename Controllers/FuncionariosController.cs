@@ -146,7 +146,7 @@ namespace MarcaAi.Backend.Controllers
             });
         }
 
-        // ✅ PUT: atualizar funcionário SEM apagar serviços por engano
+       // ✅ PUT: atualizar funcionário SEM apagar serviços por engano, com horário de almoço
 [HttpPut("{id}")]
 public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto dto)
 {
@@ -165,7 +165,38 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
 
     // -----------------------------------------------------
-    // 🔥 IMPORTANTE: Só alteramos serviços SE O FRONT ENVIAR
+    // Lógica para atualizar o horário de almoço na tabela Disponibilidade
+    // -----------------------------------------------------
+    if (dto.DtInicioAlmoco.HasValue && dto.DtFimAlmoco.HasValue)
+    {
+        var disponibilidade = await _db.Disponibilidades
+            .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
+
+        if (disponibilidade == null)
+        {
+            // Se não existir, cria uma nova entrada de almoço padrão
+            disponibilidade = new Disponibilidade
+            {
+                FuncionarioId = id,
+                Tipo = "Padrao",
+                Almoço = true,
+                DtInicioAlmoco = dto.DtInicioAlmoco.Value,
+                DtFimAlmoco = dto.DtFimAlmoco.Value
+            };
+
+            await _db.Disponibilidades.AddAsync(disponibilidade);
+        }
+        else
+        {
+            // Se existir, atualiza os horários
+            disponibilidade.DtInicioAlmoco = dto.DtInicioAlmoco.Value;
+            disponibilidade.DtFimAlmoco = dto.DtFimAlmoco.Value;
+            _db.Disponibilidades.Update(disponibilidade);
+        }
+    }
+
+    // -----------------------------------------------------
+    // Atualização de serviços
     // -----------------------------------------------------
     if (dto.ServicosIds != null)
     {
@@ -188,12 +219,12 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
             await _db.FuncionariosServicos.AddRangeAsync(newLinks);
         }
     }
-    // Caso dto.ServicosIds == null → NÃO alteramos a tabela de serviços
 
     await _db.SaveChangesAsync();
 
     return Ok(new { message = "Funcionário atualizado com sucesso!" });
 }
+
 
 
         // ✅ DELETE: excluir funcionário
@@ -238,5 +269,7 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         public string Celular { get; set; } = string.Empty;
         public string? Senha { get; set; }
         public List<int>? ServicosIds { get; set; }
+        public TimeSpan? DtInicioAlmoco { get; set; }
+        public TimeSpan? DtFimAlmoco { get; set; }
     }
 }

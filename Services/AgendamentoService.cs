@@ -47,7 +47,6 @@ public class AgendamentoService
     string mensagem =
         $"Olá, {agendamento.Cliente.Nome}!\n\n" +
         $"Você confirma a exclusão do seu agendamento?\n\n" +
-        $"Código: *{codigo}*\n\n" +
         $"✅ Confirmar:  https://marca-nv7defgj7-higors-projects-e4b93cd4.vercel.app/confirmar-exclusao?codigo={codigo}";
 
     var result = await _whats.SendMessage(
