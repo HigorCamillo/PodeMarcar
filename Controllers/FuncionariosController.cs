@@ -157,16 +157,14 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
     if (funcionario == null)
         return NotFound(new { message = "Funcionário não encontrado." });
 
-    // Atualiza apenas os campos enviados
+    // Atualiza campos básicos
     funcionario.Nome = dto.Nome;
     funcionario.Celular = dto.Celular;
 
     if (!string.IsNullOrWhiteSpace(dto.Senha))
         funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
 
-    // -----------------------------------------------------
-    // Atualiza serviços apenas se forem enviados
-    // -----------------------------------------------------
+    // Atualiza serviços, se enviados
     if (dto.ServicosIds != null)
     {
         var currentServices = await _db.FuncionariosServicos
@@ -186,16 +184,13 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         }
     }
 
-    // -----------------------------------------------------
     // Atualiza horário de almoço
-    // -----------------------------------------------------
-    // Busca a disponibilidade padrão do funcionário
     var disponibilidade = await _db.Disponibilidades
         .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao");
 
     if (!string.IsNullOrWhiteSpace(dto.DtInicioAlmoco) && !string.IsNullOrWhiteSpace(dto.DtFimAlmoco))
     {
-        // Parse horário
+        // Horários válidos enviados → ativa almoço
         if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
             !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
         {
@@ -204,7 +199,6 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
 
         if (disponibilidade == null)
         {
-            // Cria nova disponibilidade de almoço
             disponibilidade = new Disponibilidade
             {
                 FuncionarioId = id,
@@ -217,7 +211,6 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         }
         else
         {
-            // Atualiza horários existentes
             disponibilidade.DtInicioAlmoco = inicioAlmoco;
             disponibilidade.DtFimAlmoco = fimAlmoco;
             disponibilidade.Almoço = true;
@@ -226,15 +219,28 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
     }
     else
     {
-        // Checkbox desmarcado → marca Almoço = false se já existir
-        if (disponibilidade != null)
+        // Nenhum horário enviado → desativa almoço e seta 00:00
+        var zero = new TimeSpan(0, 0, 0);
+
+        if (disponibilidade == null)
+        {
+            disponibilidade = new Disponibilidade
+            {
+                FuncionarioId = id,
+                Tipo = "Padrao",
+                Almoço = false,
+                DtInicioAlmoco = zero,
+                DtFimAlmoco = zero
+            };
+            await _db.Disponibilidades.AddAsync(disponibilidade);
+        }
+        else
         {
             disponibilidade.Almoço = false;
-            disponibilidade.DtInicioAlmoco = null;
-            disponibilidade.DtFimAlmoco = null;
+            disponibilidade.DtInicioAlmoco = zero;
+            disponibilidade.DtFimAlmoco = zero;
             _db.Disponibilidades.Update(disponibilidade);
         }
-        // Se não existir disponibilidade e checkbox não marcado → não cria nada
     }
 
     await _db.SaveChangesAsync();
