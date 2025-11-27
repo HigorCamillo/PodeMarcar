@@ -188,11 +188,10 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
             await _db.FuncionariosServicos.AddRangeAsync(newLinks);
         }
     }
+// 🔥 Atualiza horário de almoço
+var disponibilidade = await _db.Disponibilidades
+    .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
 
-    // -----------------------------------------------------
-    // 🔥 Atualiza horário de almoço
-    // -----------------------------------------------------
-    // 🔥 Atualiza horário de almoço
 if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
 {
     if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
@@ -200,10 +199,6 @@ if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFim
     {
         return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
     }
-
-    // Procura uma disponibilidade padrão existente
-    var disponibilidade = await _db.Disponibilidades
-        .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
 
     if (disponibilidade == null)
     {
@@ -216,7 +211,6 @@ if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFim
             DtInicioAlmoco = inicioAlmoco,
             DtFimAlmoco = fimAlmoco
         };
-
         await _db.Disponibilidades.AddAsync(disponibilidade);
     }
     else
@@ -224,9 +218,19 @@ if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFim
         // Atualiza horários existentes
         disponibilidade.DtInicioAlmoco = inicioAlmoco;
         disponibilidade.DtFimAlmoco = fimAlmoco;
+        disponibilidade.Almoço = true;
         _db.Disponibilidades.Update(disponibilidade);
     }
 }
+else if (disponibilidade != null)
+{
+    // Se campos vazios, desativa o almoço existente
+    disponibilidade.Almoço = false;
+    disponibilidade.DtInicioAlmoco = null;
+    disponibilidade.DtFimAlmoco = null;
+    _db.Disponibilidades.Update(disponibilidade);
+}
+
 
     await _db.SaveChangesAsync();
 
