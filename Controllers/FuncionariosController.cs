@@ -188,9 +188,8 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
             await _db.FuncionariosServicos.AddRangeAsync(newLinks);
         }
     }
-// 🔥 Atualiza horário de almoço
 var disponibilidade = await _db.Disponibilidades
-    .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
+    .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao");
 
 if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
 {
@@ -230,7 +229,6 @@ else if (disponibilidade != null)
     disponibilidade.DtFimAlmoco = null;
     _db.Disponibilidades.Update(disponibilidade);
 }
-
 
     await _db.SaveChangesAsync();
 
