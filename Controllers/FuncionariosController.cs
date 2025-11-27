@@ -1,16 +1,15 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Hosting;
-using System.IO;
-using System.Threading.Tasks;
-using System.Linq;
-using System.Collections.Generic;
-using System;
-using System.ComponentModel.DataAnnotations;
 using MarcaAi.Backend.Data;
 using MarcaAi.Backend.DTOs;
 using MarcaAi.Backend.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using System.IO;
+using System.ComponentModel.DataAnnotations;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using System.Collections.Generic;
 using BCrypt.Net;
 
 namespace MarcaAi.Backend.Controllers
@@ -21,21 +20,13 @@ namespace MarcaAi.Backend.Controllers
     public class FuncionariosController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
-        private readonly IWebHostEnvironment _env;
 
-        public FuncionariosController(ApplicationDbContext db, IWebHostEnvironment env)
+        public FuncionariosController(ApplicationDbContext db)
         {
             _db = db;
-            _env = env;
         }
 
         // ✅ POST: Upload de imagem do funcionário
-        /// <summary>
-        /// Faz o upload da imagem de um funcionário e atualiza o campo ImagemUrl.
-        /// </summary>
-        /// <param name="id">ID do funcionário</param>
-        /// <param name="dto">Arquivo enviado (multipart/form-data)</param>
-        /// <returns>URL da imagem atualizada</returns>
         [HttpPost("{id}/upload-image")]
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UploadImage(int id, [FromForm] UploadImageDto dto)
@@ -49,21 +40,12 @@ namespace MarcaAi.Backend.Controllers
 
             try
             {
-                var uploadsFolder = Path.Combine(_env.WebRootPath ?? "wwwroot", "images", "employees");
-                if (!Directory.Exists(uploadsFolder))
-                    Directory.CreateDirectory(uploadsFolder);
-
-                var fileExtension = Path.GetExtension(dto.File.FileName);
-                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                using (var memoryStream = new MemoryStream())
                 {
-                    await dto.File.CopyToAsync(stream);
+                    await dto.File.CopyToAsync(memoryStream);
+                    funcionario.Imagem = memoryStream.ToArray();
+                    funcionario.ContentType = dto.File.ContentType;
                 }
-
-                var relativePath = $"/images/employees/{uniqueFileName}";
-                funcionario.ImagemUrl = relativePath;
 
                 await _db.SaveChangesAsync();
 
@@ -71,7 +53,6 @@ namespace MarcaAi.Backend.Controllers
                 {
                     funcionario.Id,
                     funcionario.Nome,
-                    ImagemUrl = relativePath,
                     message = "Imagem atualizada com sucesso!"
                 });
             }
@@ -82,9 +63,6 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ✅ GET: obter funcionário por ID
-        /// <summary>
-        /// Obtém um funcionário e seus serviços associados.
-        /// </summary>
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
@@ -99,7 +77,6 @@ namespace MarcaAi.Backend.Controllers
             var dto = new FuncionarioWithServicosDto(
                 funcionario.Id,
                 funcionario.Nome,
-                funcionario.ImagemUrl,
                 funcionario.Celular,
                 funcionario.ClienteMasterId,
                 funcionario.FuncionariosServicos.Select(fs => new ServicoMinDto(
@@ -114,10 +91,6 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ✅ GET: lista funcionários (com filtro opcional por ClienteMasterId)
-        /// <summary>
-        /// Lista todos os funcionários e seus serviços.  
-        /// É possível filtrar pelo ID do cliente master.
-        /// </summary>
         [HttpGet]
         public async Task<IActionResult> Get([FromQuery] int idClienteMaster)
         {
@@ -130,7 +103,6 @@ namespace MarcaAi.Backend.Controllers
             var dto = funcionarios.Select(f => new FuncionarioWithServicosDto(
                 f.Id,
                 f.Nome,
-                f.ImagemUrl,
                 f.Celular,
                 f.ClienteMasterId,
                 f.FuncionariosServicos.Select(fs => new ServicoMinDto(
@@ -145,9 +117,6 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ✅ POST: cria funcionário com senha criptografada
-        /// <summary>
-        /// Cria um novo funcionário.
-        /// </summary>
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] FuncionarioCreateDto dto)
         {
@@ -162,7 +131,6 @@ namespace MarcaAi.Backend.Controllers
                 Nome = dto.Nome,
                 Celular = dto.Celular,
                 ClienteMasterId = dto.ClienteMasterId,
-                ImagemUrl = dto.ImagemUrl,
                 SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha)
             };
 
@@ -175,14 +143,10 @@ namespace MarcaAi.Backend.Controllers
                 funcionario.Nome,
                 funcionario.Celular,
                 funcionario.ClienteMasterId,
-                funcionario.ImagemUrl
             });
         }
 
         // ✅ PUT: atualizar funcionário
-        /// <summary>
-        /// Atualiza os dados de um funcionário, incluindo serviços associados.
-        /// </summary>
         [HttpPut("{id}")]
         public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto dto)
         {
@@ -192,7 +156,6 @@ namespace MarcaAi.Backend.Controllers
 
             funcionario.Nome = dto.Nome;
             funcionario.Celular = dto.Celular;
-            funcionario.ImagemUrl = dto.ImagemUrl;
 
             if (!string.IsNullOrWhiteSpace(dto.Senha))
                 funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
@@ -221,9 +184,6 @@ namespace MarcaAi.Backend.Controllers
         }
 
         // ✅ DELETE: excluir funcionário
-        /// <summary>
-        /// Exclui um funcionário do sistema.
-        /// </summary>
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
@@ -236,12 +196,25 @@ namespace MarcaAi.Backend.Controllers
 
             return Ok(new { message = "Funcionário excluído com sucesso!" });
         }
+
+        // ✅ GET: obter imagem do funcionário
+        [HttpGet("{id}/image")]
+        public async Task<IActionResult> GetImage(int id)
+        {
+            var funcionario = await _db.Funcionarios.FindAsync(id);
+
+            if (funcionario == null || funcionario.Imagem == null || string.IsNullOrEmpty(funcionario.ContentType))
+            {
+                return NotFound();
+            }
+
+            return File(funcionario.Imagem, funcionario.ContentType);
+        }
     }
 
-    // ✅ DTOs auxiliares para Swagger e uploads
+    // DTOs auxiliares (mantidos para evitar erros de compilação)
     public class UploadImageDto
     {
-        /// <example>arquivo.jpg</example>
         [Required]
         public IFormFile File { get; set; }
     }
@@ -250,7 +223,6 @@ namespace MarcaAi.Backend.Controllers
     {
         public string Nome { get; set; } = string.Empty;
         public string Celular { get; set; } = string.Empty;
-        public string? ImagemUrl { get; set; }
         public string? Senha { get; set; }
         public List<int>? ServicosIds { get; set; }
     }

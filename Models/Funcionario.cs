@@ -19,7 +19,9 @@ namespace MarcaAi.Backend.Models
         [Required]
         public string SenhaHash { get; set; } = string.Empty;
 
-        public string? ImagemUrl { get; set; } // ✅ Adicionado aqui
+        // Propriedades para armazenar a imagem no banco de dados
+        public byte[]? Imagem { get; set; }
+        public string? ContentType { get; set; }
 
         [Required]
         public int ClienteMasterId { get; set; }

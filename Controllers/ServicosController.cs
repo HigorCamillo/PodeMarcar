@@ -74,7 +74,7 @@ namespace MarcaAi.Backend.Controllers
                     {
                         fs.Funcionario.Id,
                         fs.Funcionario.Nome,
-                        fs.Funcionario.ImagemUrl
+                        fs.Funcionario.Imagem
                     }).ToList()
                 })
                 .ToListAsync();
@@ -100,7 +100,7 @@ namespace MarcaAi.Backend.Controllers
                     {
                         fs.Funcionario.Id,
                         fs.Funcionario.Nome,
-                        fs.Funcionario.ImagemUrl
+                        fs.Funcionario.Imagem
                     }).ToList()
                 })
                 .ToListAsync();
