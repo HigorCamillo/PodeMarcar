@@ -202,7 +202,7 @@ public async Task<IActionResult> CreateBloqueio([FromBody] BloqueioDto dto)
                                 var fimAlmoco = date.Add(disp.DtFimAlmoco.Value);
 
                                 // Verifica se o horário do serviço se sobrepõe ao horário de almoço
-                                if ((hora < fimAlmoco && horaFimServico > inicioAlmoco))
+                                if (hora < fimAlmoco && horaFimServico > inicioAlmoco)
                                 {
                                     continue; // Pula este horário se houver conflito com o almoço
                                 }
