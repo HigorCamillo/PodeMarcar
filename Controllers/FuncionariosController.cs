@@ -189,12 +189,13 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
     // -----------------------------------------------------
     // Atualiza horário de almoço
     // -----------------------------------------------------
-    // Busca a disponibilidade padrão existente com almoço
+    // Busca a disponibilidade padrão do funcionário
     var disponibilidade = await _db.Disponibilidades
-        .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço);
+        .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao");
 
     if (!string.IsNullOrWhiteSpace(dto.DtInicioAlmoco) && !string.IsNullOrWhiteSpace(dto.DtFimAlmoco))
     {
+        // Parse horário
         if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
             !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
         {
@@ -223,19 +224,24 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
             _db.Disponibilidades.Update(disponibilidade);
         }
     }
-    else if (disponibilidade != null)
+    else
     {
-        // Nenhum horário enviado → remove almoço
-        disponibilidade.Almoço = false;
-        disponibilidade.DtInicioAlmoco = null;
-        disponibilidade.DtFimAlmoco = null;
-        _db.Disponibilidades.Update(disponibilidade);
+        // Checkbox desmarcado → marca Almoço = false se já existir
+        if (disponibilidade != null)
+        {
+            disponibilidade.Almoço = false;
+            disponibilidade.DtInicioAlmoco = null;
+            disponibilidade.DtFimAlmoco = null;
+            _db.Disponibilidades.Update(disponibilidade);
+        }
+        // Se não existir disponibilidade e checkbox não marcado → não cria nada
     }
 
     await _db.SaveChangesAsync();
 
     return Ok(new { message = "Funcionário atualizado com sucesso!" });
 }
+
 
         // ✅ DELETE: excluir funcionário
         [HttpDelete("{id}")]
