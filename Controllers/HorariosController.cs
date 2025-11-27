@@ -140,100 +140,96 @@ public async Task<IActionResult> CreateBloqueio([FromBody] BloqueioDto dto)
         }
 
         [HttpGet("disponiveis")]
-        public async Task<IActionResult> GetDisponiveis(
-            int idClienteMaster,
-            int idFuncionario,
-            DateTime from,
-            DateTime to,
-            int? idServico = null)
+public async Task<IActionResult> GetDisponiveis(
+    int idClienteMaster,
+    int idFuncionario,
+    DateTime from,
+    DateTime to,
+    int? idServico = null)
+{
+    try
+    {
+        from = DateTime.SpecifyKind(from, DateTimeKind.Unspecified);
+        to = DateTime.SpecifyKind(to, DateTimeKind.Unspecified);
+
+        if (!idServico.HasValue)
+            return BadRequest("É necessário informar o idServico para calcular a duração correta.");
+
+        var servico = await _context.Servicos
+            .FirstOrDefaultAsync(s =>
+                s.Id == idServico.Value &&
+                s.ClienteMasterId == idClienteMaster);
+
+        if (servico == null)
+            return NotFound("Serviço não encontrado ou não pertence ao cliente master informado.");
+
+        int duracaoServico = servico.DuracaoMinutos;
+        var horariosDisponiveis = new List<object>();
+
+        for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
         {
-            try
+            var disponibilidades = await _context.Disponibilidades
+                .Where(d =>
+                    d.FuncionarioId == idFuncionario &&
+                    (
+                        (d.DiaSemana.HasValue && d.DiaSemana.Value == date.DayOfWeek) ||
+                        (d.DataEspecifica.HasValue && d.DataEspecifica.Value.Date == date)
+                    )
+                )
+                .ToListAsync();
+
+            if (!disponibilidades.Any())
+                continue;
+
+            foreach (var disp in disponibilidades)
             {
-                from = DateTime.SpecifyKind(from, DateTimeKind.Unspecified);
-                to = DateTime.SpecifyKind(to, DateTimeKind.Unspecified);
+                var horaInicio = date.Add(disp.HoraInicio);
+                var horaFim = date.Add(disp.HoraFim);
 
-                // ✅ Agora a duração só existe se idServico for informado
-                if (!idServico.HasValue)
+                // Converte strings de almoço para TimeSpan
+                TimeSpan? inicioAlmoco = disp.DtInicioAlmoco.HasValue ? disp.DtInicioAlmoco : null;
+                TimeSpan? fimAlmoco = disp.DtFimAlmoco.HasValue ? disp.DtFimAlmoco : null;
+
+                for (var hora = horaInicio; hora.AddMinutes(duracaoServico) <= horaFim; hora = hora.AddMinutes(duracaoServico))
                 {
-                    return BadRequest("É necessário informar o idServico para calcular a duração correta.");
-                }
+                    var horaFimServico = hora.AddMinutes(duracaoServico);
 
-                var servico = await _context.Servicos
-                    .FirstOrDefaultAsync(s =>
-                        s.Id == idServico.Value &&
-                        s.ClienteMasterId == idClienteMaster);
-
-                if (servico == null)
-                {
-                    return NotFound("Serviço não encontrado ou não pertence ao cliente master informado.");
-                }
-
-                int duracaoServico = servico.DuracaoMinutos;
-                var horariosDisponiveis = new List<object>();
-
-                for (var date = from.Date; date <= to.Date; date = date.AddDays(1))
-                {
-                    var disponibilidades = await _context.Disponibilidades
-                        .Where(d =>
-                            d.FuncionarioId == idFuncionario &&
-                            (
-                                (d.DiaSemana.HasValue && d.DiaSemana.Value == date.DayOfWeek) ||
-                                (d.DataEspecifica.HasValue && d.DataEspecifica.Value.Date == date)
-                            )
-                        )
-                        .ToListAsync();
-
-                    if (!disponibilidades.Any())
-                        continue;
-
-                    foreach (var disp in disponibilidades)
+                    // Validação de almoço
+                    if (disp.Almoço && inicioAlmoco.HasValue && fimAlmoco.HasValue)
                     {
-                        var horaInicio = date.Add(disp.HoraInicio);
-                        var horaFim = date.Add(disp.HoraFim);
+                        var horaRelativa = hora - date;
+                        var horaFimServicoRelativa = horaFimServico - date;
 
-                        for (var hora = horaInicio; hora.AddMinutes(duracaoServico) <= horaFim; hora = hora.AddMinutes(duracaoServico))
+                        if (horaFimServicoRelativa > inicioAlmoco.Value && horaRelativa < fimAlmoco.Value)
+                            continue; // Conflito com horário de almoço
+                    }
+
+                    bool conflito = await _context.Agendamentos
+                        .Include(a => a.Servico)
+                        .AnyAsync(a =>
+                            a.FuncionarioId == idFuncionario &&
+                            a.DataHora < horaFimServico &&
+                            a.DataHora.AddMinutes(a.Servico.DuracaoMinutos) > hora
+                        );
+
+                    if (!conflito)
+                    {
+                        horariosDisponiveis.Add(new
                         {
-                            var horaFimServico = hora.AddMinutes(duracaoServico);
-
-                            // ✅ Validação de Almoço
-                            if (disp.Almoço && disp.DtInicioAlmoco.HasValue && disp.DtFimAlmoco.HasValue)
-                            {
-                                var inicioAlmoco = date.Add(disp.DtInicioAlmoco.Value);
-                                var fimAlmoco = date.Add(disp.DtFimAlmoco.Value);
-
-                                // Verifica se o horário do serviço se sobrepõe ao horário de almoço
-                                if (hora < fimAlmoco && horaFimServico > inicioAlmoco)
-                                {
-                                    continue; // Pula este horário se houver conflito com o almoço
-                                }
-                            }
-
-                            bool conflito = await _context.Agendamentos
-                                .Include(a => a.Servico)
-                                .AnyAsync(a =>
-                                    a.FuncionarioId == idFuncionario &&
-                                    a.DataHora < horaFimServico &&
-                                    a.DataHora.AddMinutes(a.Servico.DuracaoMinutos) > hora
-                                );
-
-                            if (!conflito)
-                            {
-                                horariosDisponiveis.Add(new
-                                {
-                                    Data = date.ToString("yyyy-MM-dd"),
-                                    Hora = hora.ToString("HH:mm")
-                                });
-                            }
-                        }
+                            Data = date.ToString("yyyy-MM-dd"),
+                            Hora = hora.ToString("HH:mm")
+                        });
                     }
                 }
-
-                return Ok(horariosDisponiveis);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Erro interno: {ex.Message}");
             }
         }
+
+        return Ok(horariosDisponiveis);
+    }
+    catch (Exception ex)
+    {
+        return StatusCode(500, $"Erro interno: {ex.Message}");
+    }
+}
     }
 }
