@@ -3,6 +3,7 @@ using MarcaAi.Backend.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
+using System.IO;
 using System.ComponentModel.DataAnnotations;
 using System.IO;
 using System;
@@ -69,7 +70,7 @@ namespace MarcaAi.Backend.Controllers
                     s.Nome,
                     s.Preco,
                     s.DuracaoMinutos,
-                    s.ImagemUrl,
+                    
                     s.Ativo,
                     Funcionarios = s.FuncionariosServicos.Select(fs => new
                     {
@@ -97,7 +98,7 @@ namespace MarcaAi.Backend.Controllers
                     s.Nome,
                     s.Preco,
                     s.DuracaoMinutos,
-                    s.ImagemUrl,
+                    
                     Funcionarios = s.FuncionariosServicos.Select(fs => new
                     {
                         fs.Funcionario.Id,
@@ -141,7 +142,7 @@ namespace MarcaAi.Backend.Controllers
             servico.Nome = dto.Nome;
             servico.Preco = dto.Preco;
             servico.DuracaoMinutos = dto.DuracaoMinutos;
-            servico.ImagemUrl = dto.ImagemUrl;
+            
             servico.Ativo = dto.Ativo;
 
             await _context.SaveChangesAsync();
@@ -180,7 +181,7 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
             fs.Servico.Nome,
             fs.Servico.Preco,
             fs.Servico.DuracaoMinutos,
-            fs.Servico.ImagemUrl
+            
         })
         .ToList();
 
@@ -200,21 +201,12 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
 
             try
             {
-                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "images", "services");
-                if (!Directory.Exists(uploadsFolder))
-                    Directory.CreateDirectory(uploadsFolder);
-
-                var fileExtension = Path.GetExtension(dto.File.FileName);
-                var uniqueFileName = $"{Guid.NewGuid()}{fileExtension}";
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                using (var memoryStream = new MemoryStream())
                 {
-                    await dto.File.CopyToAsync(stream);
+                    await dto.File.CopyToAsync(memoryStream);
+                    servico.Imagem = memoryStream.ToArray();
+                    servico.ContentType = dto.File.ContentType;
                 }
-
-                var relativePath = $"/images/services/{uniqueFileName}";
-                servico.ImagemUrl = relativePath;
 
                 await _context.SaveChangesAsync();
 
@@ -222,7 +214,7 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
                 {
                     servico.Id,
                     servico.Nome,
-                    ImagemUrl = relativePath,
+                    
                     message = "Imagem do serviço atualizada com sucesso!"
                 });
             }
@@ -233,12 +225,26 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
         }
     }
 
-    public class ServicoDto
+        // GET: /api/Servicos/{id}/image
+        [HttpGet("{id}/image")]
+        public async Task<IActionResult> GetImage(int id)
+        {
+            var servico = await _context.Servicos.FindAsync(id);
+
+            if (servico == null || servico.Imagem == null || string.IsNullOrEmpty(servico.ContentType))
+            {
+                return NotFound();
+            }
+
+            return File(servico.Imagem, servico.ContentType);
+        }
+
+	        public class ServicoDto
     {
         public string Nome { get; set; } = string.Empty;
         public decimal Preco { get; set; }
         public int DuracaoMinutos { get; set; }
-        public string? ImagemUrl { get; set; }
+        
         public bool Ativo { get; set; }
         public int ClienteMasterId { get; set; }
     }
