@@ -192,39 +192,41 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
     // -----------------------------------------------------
     // 🔥 Atualiza horário de almoço
     // -----------------------------------------------------
-    if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
+    // 🔥 Atualiza horário de almoço
+if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
+{
+    if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
+        !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
     {
-        if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
-            !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
-        {
-            return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
-        }
-
-        var disponibilidade = await _db.Disponibilidades
-            .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
-
-        if (disponibilidade == null)
-        {
-            // Se não existir, cria uma nova entrada de almoço padrão
-            disponibilidade = new Disponibilidade
-            {
-                FuncionarioId = id,
-                Tipo = "Padrao",
-                Almoço = true,
-                DtInicioAlmoco = inicioAlmoco,
-                DtFimAlmoco = fimAlmoco
-            };
-
-            await _db.Disponibilidades.AddAsync(disponibilidade);
-        }
-        else
-        {
-            // Se existir, atualiza os horários
-            disponibilidade.DtInicioAlmoco = inicioAlmoco;
-            disponibilidade.DtFimAlmoco = fimAlmoco;
-            _db.Disponibilidades.Update(disponibilidade);
-        }
+        return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
     }
+
+    // Procura uma disponibilidade padrão existente
+    var disponibilidade = await _db.Disponibilidades
+        .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
+
+    if (disponibilidade == null)
+    {
+        // Cria uma nova entrada de almoço
+        disponibilidade = new Disponibilidade
+        {
+            FuncionarioId = id,
+            Tipo = "Padrao",
+            Almoço = true,
+            DtInicioAlmoco = inicioAlmoco,
+            DtFimAlmoco = fimAlmoco
+        };
+
+        await _db.Disponibilidades.AddAsync(disponibilidade);
+    }
+    else
+    {
+        // Atualiza horários existentes
+        disponibilidade.DtInicioAlmoco = inicioAlmoco;
+        disponibilidade.DtFimAlmoco = fimAlmoco;
+        _db.Disponibilidades.Update(disponibilidade);
+    }
+}
 
     await _db.SaveChangesAsync();
 

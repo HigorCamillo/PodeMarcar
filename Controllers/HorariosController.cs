@@ -186,7 +186,6 @@ public async Task<IActionResult> GetDisponiveis(
                 var horaInicio = date.Add(disp.HoraInicio);
                 var horaFim = date.Add(disp.HoraFim);
 
-                // Converte strings de almoço para TimeSpan
                 TimeSpan? inicioAlmoco = disp.DtInicioAlmoco.HasValue ? disp.DtInicioAlmoco : null;
                 TimeSpan? fimAlmoco = disp.DtFimAlmoco.HasValue ? disp.DtFimAlmoco : null;
 
