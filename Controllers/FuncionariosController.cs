@@ -165,38 +165,7 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
 
     // -----------------------------------------------------
-    // Lógica para atualizar o horário de almoço na tabela Disponibilidade
-    // -----------------------------------------------------
-    if (dto.DtInicioAlmoco.HasValue && dto.DtFimAlmoco.HasValue)
-    {
-        var disponibilidade = await _db.Disponibilidades
-            .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
-
-        if (disponibilidade == null)
-        {
-            // Se não existir, cria uma nova entrada de almoço padrão
-            disponibilidade = new Disponibilidade
-            {
-                FuncionarioId = id,
-                Tipo = "Padrao",
-                Almoço = true,
-                DtInicioAlmoco = dto.DtInicioAlmoco.Value,
-                DtFimAlmoco = dto.DtFimAlmoco.Value
-            };
-
-            await _db.Disponibilidades.AddAsync(disponibilidade);
-        }
-        else
-        {
-            // Se existir, atualiza os horários
-            disponibilidade.DtInicioAlmoco = dto.DtInicioAlmoco.Value;
-            disponibilidade.DtFimAlmoco = dto.DtFimAlmoco.Value;
-            _db.Disponibilidades.Update(disponibilidade);
-        }
-    }
-
-    // -----------------------------------------------------
-    // Atualização de serviços
+    // 🔥 Atualiza serviços apenas se forem enviados
     // -----------------------------------------------------
     if (dto.ServicosIds != null)
     {
@@ -217,6 +186,43 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
             });
 
             await _db.FuncionariosServicos.AddRangeAsync(newLinks);
+        }
+    }
+
+    // -----------------------------------------------------
+    // 🔥 Atualiza horário de almoço
+    // -----------------------------------------------------
+    if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
+    {
+        if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
+            !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
+        {
+            return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
+        }
+
+        var disponibilidade = await _db.Disponibilidades
+            .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço == true);
+
+        if (disponibilidade == null)
+        {
+            // Se não existir, cria uma nova entrada de almoço padrão
+            disponibilidade = new Disponibilidade
+            {
+                FuncionarioId = id,
+                Tipo = "Padrao",
+                Almoço = true,
+                DtInicioAlmoco = inicioAlmoco,
+                DtFimAlmoco = fimAlmoco
+            };
+
+            await _db.Disponibilidades.AddAsync(disponibilidade);
+        }
+        else
+        {
+            // Se existir, atualiza os horários
+            disponibilidade.DtInicioAlmoco = inicioAlmoco;
+            disponibilidade.DtFimAlmoco = fimAlmoco;
+            _db.Disponibilidades.Update(disponibilidade);
         }
     }
 
@@ -269,7 +275,8 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         public string Celular { get; set; } = string.Empty;
         public string? Senha { get; set; }
         public List<int>? ServicosIds { get; set; }
-        public TimeSpan? DtInicioAlmoco { get; set; }
-        public TimeSpan? DtFimAlmoco { get; set; }
+        public string DtInicioAlmoco { get; set; } // formato "HH:mm"
+        public string DtFimAlmoco { get; set; }    // formato "HH:mm"
     }
+
 }
