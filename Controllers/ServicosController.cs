@@ -5,7 +5,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using System.IO;
 using System.ComponentModel.DataAnnotations;
-using System.IO;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -70,7 +69,6 @@ namespace MarcaAi.Backend.Controllers
                     s.Nome,
                     s.Preco,
                     s.DuracaoMinutos,
-                    
                     s.Ativo,
                     Funcionarios = s.FuncionariosServicos.Select(fs => new
                     {
@@ -98,7 +96,6 @@ namespace MarcaAi.Backend.Controllers
                     s.Nome,
                     s.Preco,
                     s.DuracaoMinutos,
-                    
                     Funcionarios = s.FuncionariosServicos.Select(fs => new
                     {
                         fs.Funcionario.Id,
@@ -120,7 +117,6 @@ namespace MarcaAi.Backend.Controllers
                 Nome = dto.Nome,
                 Preco = dto.Preco,
                 DuracaoMinutos = dto.DuracaoMinutos,
-                ImagemUrl = dto.ImagemUrl,
                 Ativo = dto.Ativo,
                 ClienteMasterId = dto.ClienteMasterId
             };
@@ -142,7 +138,6 @@ namespace MarcaAi.Backend.Controllers
             servico.Nome = dto.Nome;
             servico.Preco = dto.Preco;
             servico.DuracaoMinutos = dto.DuracaoMinutos;
-            
             servico.Ativo = dto.Ativo;
 
             await _context.SaveChangesAsync();
@@ -163,30 +158,30 @@ namespace MarcaAi.Backend.Controllers
         }
 
         [HttpGet("funcionario/{idFuncionario}")]
-public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
-{
-    var funcionario = await _context.Funcionarios
-        .Include(f => f.FuncionariosServicos)
-            .ThenInclude(fs => fs.Servico)
-        .FirstOrDefaultAsync(f => f.Id == idFuncionario);
-
-    if (funcionario == null)
-        return NotFound(new { message = "Funcionário não encontrado." });
-
-    var servicos = funcionario.FuncionariosServicos
-        .Where(fs => fs.Servico.Ativo)
-        .Select(fs => new
+        public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
         {
-            fs.Servico.Id,
-            fs.Servico.Nome,
-            fs.Servico.Preco,
-            fs.Servico.DuracaoMinutos,
-            
-        })
-        .ToList();
+            var funcionario = await _context.Funcionarios
+                .Include(f => f.FuncionariosServicos)
+                    .ThenInclude(fs => fs.Servico)
+                .FirstOrDefaultAsync(f => f.Id == idFuncionario);
 
-    return Ok(servicos);
-}
+            if (funcionario == null)
+                return NotFound(new { message = "Funcionário não encontrado." });
+
+            var servicos = funcionario.FuncionariosServicos
+                .Where(fs => fs.Servico.Ativo)
+                .Select(fs => new
+                {
+                    fs.Servico.Id,
+                    fs.Servico.Nome,
+                    fs.Servico.Preco,
+                    fs.Servico.DuracaoMinutos,
+                })
+                .ToList();
+
+            return Ok(servicos);
+        }
+
         // POST: /api/Servicos/{id}/upload-image
         [HttpPost("{id}/upload-image")]
         [Consumes("multipart/form-data")]
@@ -214,7 +209,6 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
                 {
                     servico.Id,
                     servico.Nome,
-                    
                     message = "Imagem do serviço atualizada com sucesso!"
                 });
             }
@@ -223,7 +217,6 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
                 return StatusCode(500, new { message = "Erro ao fazer upload da imagem.", error = ex.Message });
             }
         }
-    }
 
         // GET: /api/Servicos/{id}/image
         [HttpGet("{id}/image")]
@@ -238,13 +231,13 @@ public async Task<IActionResult> GetServicosByFuncionario(int idFuncionario)
 
             return File(servico.Imagem, servico.ContentType);
         }
+    }
 
-	        public class ServicoDto
+    public class ServicoDto
     {
         public string Nome { get; set; } = string.Empty;
         public decimal Preco { get; set; }
         public int DuracaoMinutos { get; set; }
-        
         public bool Ativo { get; set; }
         public int ClienteMasterId { get; set; }
     }
