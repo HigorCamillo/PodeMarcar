@@ -146,42 +146,55 @@ namespace MarcaAi.Backend.Controllers
             });
         }
 
-        // ✅ PUT: atualizar funcionário
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto dto)
+        // ✅ PUT: atualizar funcionário SEM apagar serviços por engano
+[HttpPut("{id}")]
+public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto dto)
+{
+    var funcionario = await _db.Funcionarios
+        .Include(f => f.FuncionariosServicos)
+        .FirstOrDefaultAsync(f => f.Id == id);
+
+    if (funcionario == null)
+        return NotFound(new { message = "Funcionário não encontrado." });
+
+    // Atualiza apenas os campos enviados
+    funcionario.Nome = dto.Nome;
+    funcionario.Celular = dto.Celular;
+
+    if (!string.IsNullOrWhiteSpace(dto.Senha))
+        funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
+
+    // -----------------------------------------------------
+    // 🔥 IMPORTANTE: Só alteramos serviços SE O FRONT ENVIAR
+    // -----------------------------------------------------
+    if (dto.ServicosIds != null)
+    {
+        // Remove os serviços atuais
+        var currentServices = await _db.FuncionariosServicos
+            .Where(fs => fs.FuncionarioId == id)
+            .ToListAsync();
+
+        _db.FuncionariosServicos.RemoveRange(currentServices);
+
+        // Adiciona os novos
+        if (dto.ServicosIds.Any())
         {
-            var funcionario = await _db.Funcionarios.FindAsync(id);
-            if (funcionario == null)
-                return NotFound(new { message = "Funcionário não encontrado." });
-
-            funcionario.Nome = dto.Nome;
-            funcionario.Celular = dto.Celular;
-
-            if (!string.IsNullOrWhiteSpace(dto.Senha))
-                funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
-
-            // Atualiza serviços
-            var currentServices = await _db.FuncionariosServicos
-                .Where(fs => fs.FuncionarioId == id)
-                .ToListAsync();
-
-            _db.FuncionariosServicos.RemoveRange(currentServices);
-
-            if (dto.ServicosIds?.Any() == true)
+            var newLinks = dto.ServicosIds.Select(servicoId => new FuncionarioServico
             {
-                var newLinks = dto.ServicosIds.Select(servicoId => new FuncionarioServico
-                {
-                    FuncionarioId = id,
-                    ServicoId = servicoId
-                });
+                FuncionarioId = id,
+                ServicoId = servicoId
+            });
 
-                await _db.FuncionariosServicos.AddRangeAsync(newLinks);
-            }
-
-            await _db.SaveChangesAsync();
-
-            return Ok(new { message = "Funcionário atualizado com sucesso!" });
+            await _db.FuncionariosServicos.AddRangeAsync(newLinks);
         }
+    }
+    // Caso dto.ServicosIds == null → NÃO alteramos a tabela de serviços
+
+    await _db.SaveChangesAsync();
+
+    return Ok(new { message = "Funcionário atualizado com sucesso!" });
+}
+
 
         // ✅ DELETE: excluir funcionário
         [HttpDelete("{id}")]
