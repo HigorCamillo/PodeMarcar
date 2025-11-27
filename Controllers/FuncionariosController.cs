@@ -165,18 +165,16 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
         funcionario.SenhaHash = BCrypt.Net.BCrypt.HashPassword(dto.Senha);
 
     // -----------------------------------------------------
-    // 🔥 Atualiza serviços apenas se forem enviados
+    // Atualiza serviços apenas se forem enviados
     // -----------------------------------------------------
     if (dto.ServicosIds != null)
     {
-        // Remove os serviços atuais
         var currentServices = await _db.FuncionariosServicos
             .Where(fs => fs.FuncionarioId == id)
             .ToListAsync();
 
         _db.FuncionariosServicos.RemoveRange(currentServices);
 
-        // Adiciona os novos
         if (dto.ServicosIds.Any())
         {
             var newLinks = dto.ServicosIds.Select(servicoId => new FuncionarioServico
@@ -184,58 +182,60 @@ public async Task<IActionResult> Update(int id, [FromBody] FuncionarioUpdateDto 
                 FuncionarioId = id,
                 ServicoId = servicoId
             });
-
             await _db.FuncionariosServicos.AddRangeAsync(newLinks);
         }
     }
-var disponibilidade = await _db.Disponibilidades
-    .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao");
 
-if (!string.IsNullOrEmpty(dto.DtInicioAlmoco) && !string.IsNullOrEmpty(dto.DtFimAlmoco))
-{
-    if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
-        !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
-    {
-        return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
-    }
+    // -----------------------------------------------------
+    // Atualiza horário de almoço
+    // -----------------------------------------------------
+    // Busca a disponibilidade padrão existente com almoço
+    var disponibilidade = await _db.Disponibilidades
+        .FirstOrDefaultAsync(d => d.FuncionarioId == id && d.Tipo == "Padrao" && d.Almoço);
 
-    if (disponibilidade == null)
+    if (!string.IsNullOrWhiteSpace(dto.DtInicioAlmoco) && !string.IsNullOrWhiteSpace(dto.DtFimAlmoco))
     {
-        // Cria uma nova entrada de almoço
-        disponibilidade = new Disponibilidade
+        if (!TimeSpan.TryParse(dto.DtInicioAlmoco, out var inicioAlmoco) ||
+            !TimeSpan.TryParse(dto.DtFimAlmoco, out var fimAlmoco))
         {
-            FuncionarioId = id,
-            Tipo = "Padrao",
-            Almoço = true,
-            DtInicioAlmoco = inicioAlmoco,
-            DtFimAlmoco = fimAlmoco
-        };
-        await _db.Disponibilidades.AddAsync(disponibilidade);
+            return BadRequest(new { message = "Formato de horário inválido. Use HH:mm" });
+        }
+
+        if (disponibilidade == null)
+        {
+            // Cria nova disponibilidade de almoço
+            disponibilidade = new Disponibilidade
+            {
+                FuncionarioId = id,
+                Tipo = "Padrao",
+                Almoço = true,
+                DtInicioAlmoco = inicioAlmoco,
+                DtFimAlmoco = fimAlmoco
+            };
+            await _db.Disponibilidades.AddAsync(disponibilidade);
+        }
+        else
+        {
+            // Atualiza horários existentes
+            disponibilidade.DtInicioAlmoco = inicioAlmoco;
+            disponibilidade.DtFimAlmoco = fimAlmoco;
+            disponibilidade.Almoço = true;
+            _db.Disponibilidades.Update(disponibilidade);
+        }
     }
-    else
+    else if (disponibilidade != null)
     {
-        // Atualiza horários existentes
-        disponibilidade.DtInicioAlmoco = inicioAlmoco;
-        disponibilidade.DtFimAlmoco = fimAlmoco;
-        disponibilidade.Almoço = true;
+        // Nenhum horário enviado → remove almoço
+        disponibilidade.Almoço = false;
+        disponibilidade.DtInicioAlmoco = null;
+        disponibilidade.DtFimAlmoco = null;
         _db.Disponibilidades.Update(disponibilidade);
     }
-}
-else if (disponibilidade != null)
-{
-    // Se campos vazios, desativa o almoço existente
-    disponibilidade.Almoço = false;
-    disponibilidade.DtInicioAlmoco = null;
-    disponibilidade.DtFimAlmoco = null;
-    _db.Disponibilidades.Update(disponibilidade);
-}
 
     await _db.SaveChangesAsync();
 
     return Ok(new { message = "Funcionário atualizado com sucesso!" });
 }
-
-
 
         // ✅ DELETE: excluir funcionário
         [HttpDelete("{id}")]
